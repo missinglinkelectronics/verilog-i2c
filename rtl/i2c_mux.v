@@ -32,12 +32,13 @@ THE SOFTWARE.
 
 module i2c_mux #(
     parameter FILTER_LEN = 4,
-    parameter DEV_ADDR = 7'h70
+    parameter DEV_ADDR = 7'h70,
+    parameter PORTS = 4
 )
 (
     input wire        clk,
     input wire        rst,
-    output wire [3:0] selected_port,
+    output wire [PORTS-1:0] selected_port,
 
     /*
      * I2C slave interface
@@ -52,12 +53,12 @@ module i2c_mux #(
     /*
      * I2C master interfaces
      */
-    input  wire [3:0] master_scl_i,
-    output wire [3:0] master_scl_o,
-    output wire [3:0] master_scl_t,
-    input  wire [3:0] master_sda_i,
-    output wire [3:0] master_sda_o,
-    output wire [3:0] master_sda_t
+    input  wire [PORTS-1:0] master_scl_i,
+    output wire [PORTS-1:0] master_scl_o,
+    output wire [PORTS-1:0] master_scl_t,
+    input  wire [PORTS-1:0] master_sda_i,
+    output wire [PORTS-1:0] master_sda_o,
+    output wire [PORTS-1:0] master_sda_t
 );
 
 wire [7:0] mux_reg;
@@ -83,12 +84,12 @@ i2c_single_reg #(
     .data_out(mux_reg)
 );
 
-reg [3:0] port;
+reg [PORTS-1:0] port;
 
 reg slave_scl_r;
 reg slave_sda_r;
-reg [3:0] master_scl_r;
-reg [3:0] master_sda_r;
+reg [PORTS-1:0] master_scl_r;
+reg [PORTS-1:0] master_sda_r;
 
 assign slave_scl_o = slave_scl_t;
 assign slave_sda_o = slave_sda_t;
@@ -103,44 +104,20 @@ assign master_sda_t = master_sda_r;
 assign selected_port = port;
 
 always @(posedge clk) begin
-    master_scl_r <= 4'hf;
-    master_sda_r <= 4'hf;
+    master_scl_r <= {PORTS{1'h1}};
+    master_sda_r <= {PORTS{1'h1}};
     slave_scl_r <= mux_scl_t || mux_scl_o;
     slave_sda_r <= mux_sda_t || mux_sda_o;
 
-    case (mux_reg[2:0])
-    3'b100: begin
-        port <= 4'b0001;
-        master_scl_r[0] <= slave_scl_i || !slave_scl_t;
-        master_sda_r[0] <= slave_sda_i || !slave_sda_t;
-        slave_scl_r <= (master_scl_i[0] || !master_scl_t[0]) && (mux_scl_t || mux_scl_o);
-        slave_sda_r <= (master_sda_i[0] || !master_sda_t[0]) && (mux_sda_t || mux_sda_o);
+    if (mux_reg >= 4 && mux_reg < PORTS + 4) begin
+        port <= mux_reg - 4;
+        master_scl_r[mux_reg-4] <= slave_scl_i || !slave_scl_t;
+        master_sda_r[mux_reg-4] <= slave_sda_i || !slave_sda_t;
+        slave_scl_r <= (master_scl_i[mux_reg-4] || !master_scl_t[mux_reg-4]) && (mux_scl_t || mux_scl_o);
+        slave_sda_r <= (master_sda_i[mux_reg-4] || !master_sda_t[mux_reg-4]) && (mux_sda_t || mux_sda_o);
+    end else begin
+        port <= 0;
     end
-    3'b101: begin
-        port <= 4'b0010;
-        master_scl_r[1] <= slave_scl_i || !slave_scl_t;
-        master_sda_r[1] <= slave_sda_i || !slave_sda_t;
-        slave_scl_r <= (master_scl_i[1] || !master_scl_t[1]) && (mux_scl_t || mux_scl_o);
-        slave_sda_r <= (master_sda_i[1] || !master_sda_t[1]) && (mux_sda_t || mux_sda_o);
-    end
-    3'b110: begin
-        port <= 4'b0100;
-        master_scl_r[2] <= slave_scl_i || !slave_scl_t;
-        master_sda_r[2] <= slave_sda_i || !slave_sda_t;
-        slave_scl_r <= (master_scl_i[2] || !master_scl_t[2]) && (mux_scl_t || mux_scl_o);
-        slave_sda_r <= (master_sda_i[2] || !master_sda_t[2]) && (mux_sda_t || mux_sda_o);
-    end
-    3'b111: begin
-        port <= 4'b1000;
-        master_scl_r[3] <= slave_scl_i || !slave_scl_t;
-        master_sda_r[3] <= slave_sda_i || !slave_sda_t;
-        slave_scl_r <= (master_scl_i[3] || !master_scl_t[3]) && (mux_scl_t || mux_scl_o);
-        slave_sda_r <= (master_sda_i[3] || !master_sda_t[3]) && (mux_sda_t || mux_sda_o);
-    end
-    default: begin
-        port <= 4'b0000;
-    end endcase
-
 end
 
 endmodule
